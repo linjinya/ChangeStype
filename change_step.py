@@ -1,91 +1,148 @@
+# -*- coding: utf8 -*-
 import requests
+import hashlib
 import json
 import time
 import random
-import gevent
-from hashlib import md5
+requests.packages.urllib3.disable_warnings
+def md5(code):
+    res=hashlib.md5()
+    res.update(code.encode("utf8"))
+    return res.hexdigest()
 
+def get_information(mobile,password):
+    header = {
+        'Content-Type': 'application/json; charset=utf-8',
+        "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SM-G9500 Build/PPR1.180610.011)"
+    }
+    url="https://sports.lifesense.com/sessions_service/login?version=4.5&systemType=2"
+    datas = {
+        "appType":6,
+        "clientId":'8e844e28db7245eb81823132464835eb',
+        "loginName":str(mobile),
+        "password":md5(str(password)),
+        "roleType":0
+        }
+    response =requests.post(url,headers=header,data=json.dumps(datas))
+    return response.text
 
-class Step:
-    def __init__(self, users):
-        self.user_info = users
-        self.login_url = "https://sports.lifesense.com/sessions_service/login?" \
-                         "platform=android&systemType=2&version=4.6.7"
-        self.step_url = "https://sports.lifesense.com/sport_service/sport/sport/uploadMobileStepV2?" \
-                        "version=4.5&systemType=2"
+def update_step(step,information):
+    step =int(step)
+    url="https://sports.lifesense.com/sport_service/sport/sport/uploadMobileStepV2?version=4.5&systemType=2"
+    accessToken=json.loads(information)["data"]["accessToken"]
+    userId=json.loads(information)["data"]["userId"]
+    #print(json.loads(information))
+    #print(accessToken)
+    #print(userId)
+    #获取当前时间和日期
+    timeStamp=time.time()
+    localTime = time.localtime(timeStamp)
+    strTime = time.strftime("%Y-%m-%d %H:%M:%S", localTime)
+    print(strTime)
+    measureTime=strTime+","+str(int(timeStamp))
 
+    header = {
+    'Cookie': 'accessToken='+accessToken,
+    'Content-Type': 'application/json; charset=utf-8',
+    "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SM-G9500 Build/PPR1.180610.011)"
+    }
+    sport_datas = {
+        "list": [
+            {
+                 "DataSource":2,
+                #"active":0,
+                 "calories":str(int(step/4)),
+                #"dataSource":4,
+                 "deviceId":"M_NULL",
+                 "distance":str(int(step/3)),
+                 "exerciseTime":0,
+                 "isUpload":0,
+                 "measurementTime":measureTime,
+                #"priority":0,
+                 "step": str(step),
+                 "type":2,
+                 "updated":str(int(time.time()*1000)),
+                 "userId":str(userId)
+                }]
+                }
+    result=requests.post(url,headers=header,data=json.dumps(sport_datas))
+    # print(result.text)
+    return result.text
 
-    def get_id_token(self, phone, pwd):
-        header_login = {'Content-Type': 'application/json; charset=utf-8',
-                        'Accept-Encoding': 'gzip',
-                        'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 10; MI 8 MIUI/V12.0.1.0.QEACNXM)'
-                        }
-        data_org_login = {"appType": 6, "clientId": md5(phone.encode(encoding="utf-8")).hexdigest(), "loginName": phone,
-                          "password": md5(pwd.encode(encoding="utf-8")).hexdigest(), "roleType": 0}
-        data_login = json.dumps(data_org_login)
-        resp_data = json.loads(requests.post(url=self.login_url, data=data_login, headers=header_login).text)
-        uid = resp_data['data']['userId']
-        token = resp_data['data']['accessToken']
-
-        return uid, token, phone
-
-
-    def bind_device(self, uid, token):
-        bind_url = "https://sports.lifesense.com/device_service/device_user/bind"
-        bind_org_data = {
-                        "qrcode": "http://we.qq.com/d/AQC7PnaOXQhy3VvzFeP5bZMKmAQrGE6NJWdK3Xnk",
-                        "userId": uid
-                        }
-        bind_data = json.dumps(bind_org_data)
-        bind_header = {
-                    "Cookie": "accessToken=" + token,
-                    "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 10; MI 8 MIUI/V12.0.2.0.QEACNXM)"
-                    }
-
-
-    def set_step(self, uid, token, phone, step):
-        self.bind_device(uid, token)
-        header_step = {'Cookie': 'accessToken=' + token,
-                       'Content-Type': 'application/json; charset=utf-8'
-                       }
-        data_org_step = {"list":
-                             [{"DataSource": 2,
-                               "active": 1,
-                               "calories": str(int(step // 20)),
-                               "dataSource": 2,
-                               "deviceId": "M_NULL",
-                               "distance": int(step / 3),
-                               "exerciseTime": 0,
-                               "isUpload": 0,
-                               "measurementTime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(time.time()))),
-                               "priority": 0,
-                               "step": step,
-                               "type": 2,
-                               "updated": float(str(time.time()).split(".")[0]) + float(str(time.time()).split(".")[1][:3]),
-                               "userId": uid}]
-                         }
-        data_step = json.dumps(data_org_step)
-        result = json.loads(requests.post(url=self.step_url, data=data_step, headers=header_step).text)
-        data = list(set(result['data']['pedometerRecordHourlyList'][0]['step'].split(",")))
-
-        # print(step, int(max(data)), data)
-        for i in range(len(data)):
-            data[i] = int(data[i])
-
-        if step > max(data):
-            print(phone, ":", step)
+def bind(information):
+    accessToken = json.loads(information)["data"]["accessToken"]
+    userId = json.loads(information)["data"]["userId"]
+    header = {
+        'Cookie': 'accessToken=' + accessToken,
+        'Content-Type': 'application/json; charset=utf-8',
+        "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SM-G9500 Build/PPR1.180610.011)"
+    }
+    datas = {
+        "qrcode": 'http://we.qq.com/d/AQC7PnaOXQhy3VvzFeP5bZMKmAQrGE6NJWdK3Xnk',  # 这东西不知道能用多久
+        "userId": userId,
+    }
+    url = 'https://sports.lifesense.com/device_service/device_user/bind'
+    result = requests.post(url,headers=header,data=json.dumps(datas))
+    if result.status_code == '401':
+        print('重新登录')
+        main()
+    else:
+        msg = result.json()
+        if msg.get('msg') == '成功':
+            print('绑定成功，即将开刷')
         else:
-            print(phone, ":", max(data))
+            print('绑定失败')
 
+def server_send(msg):
+    if sckey == '':
+        return
+    server_url = "https://sc.ftqq.com/" + str(sckey) + ".send"
+    data = {
+            'text': msg,
+            'desp': msg
+        }
+    requests.post(server_url, data=data)
 
-    def run(self):
-        for phone, pwd in self.user_info.items():
-            jobs = [gevent.spawn(self.set_step, *(self.get_id_token(phone, pwd)), random.randint(7000, 15000))]
-            gevent.joinall(jobs)
+def kt_send(msg):
+    if ktkey == '':
+        return
+    kt_url = 'https://push.xuthus.cc/send/'+str(ktkey)
+    data = ('步数刷取完成，请查看详细信息~\n'+str(msg)).encode("utf-8")
+    requests.post(kt_url, data=data)
 
+def execute_walk(phone,password,step):
+    information=get_information(phone,password)
+    bind(information)
+    update_result=update_step(step,information)
+    result=json.loads(update_result)["msg"]
+    if result == '成功':
+        msg = "刷新步数成功！此次刷取" + str(step) + "步。"
+        print(msg)
+        server_send(msg)
+        kt_send(msg)
+    else:
+        msg = "刷新步数失败！请查看云函数日志。"
+        print(msg)
+        server_send(msg)
+        kt_send(msg)
+
+def main():
+    if phone and password and step != '':
+        execute_walk(phone, password, step)
+    else:
+        print("参数不全,请指定参数。或者在调用中直接指定参数")
+
+# -- 配置 --
+# ------------------------------
+phone = '18906180921'  # 登陆账号
+password = 'Woods009lx'  # 密码
+step = '18652'  # 随机8000-10000步数
+sckey = ''  # server酱key(可空)
+ktkey = ''  # 酷推key(可空)
+# ------------------------------
+
+def main_handler(event, context):
+    return main()
 
 if __name__ == '__main__':
-    user_info = {"phone": "password",
-                 }  # add your target dict here
-    zqy = Step(user_info)
-    zqy.run()
+    main()
